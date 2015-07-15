@@ -40,7 +40,7 @@ class CurrencyDenominationTwitterApp:
                     self.last_error = 'Gen Error'
                 continue
             except Exception as ex:
-                print 'The following unexpected error occured:'
+                print 'The following unexpected error occurred:'
                 print ex
                 sys.exit(1)
 
