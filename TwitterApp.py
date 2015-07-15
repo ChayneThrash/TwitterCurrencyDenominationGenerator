@@ -6,16 +6,16 @@ from requests_oauthlib import OAuth1
 from CurrencyDenominationGenerator import *
 import Settings
 from time import sleep
-
+from ssl import SSLError
 
 class CurrencyDenominationTwitterApp:
     def __init__(self):
         self.oauth = OAuth1(Settings.CONSUMER_KEY, client_secret=Settings.CONSUMER_SECRET, resource_owner_key=Settings.TOKEN_KEY,
                             resource_owner_secret=Settings.TOKEN_SECRET, signature_type='auth_header')
         self.last_error = None
-        self.network_error_delay = 250
-        self.general_http_error_delay = 5000
-        self.http_420_error_delay = 60000
+        self.network_error_delay = 0
+        self.general_http_error_delay = 5
+        self.http_420_error_delay = 60
         self.num_general_http_errors = 0
         self.num_420_errors = 0
 
@@ -25,7 +25,11 @@ class CurrencyDenominationTwitterApp:
 
             try:
                 stream = self.__connectToStream()
-            except requests.ConnectionError:
+                for line in stream.iter_lines():
+                    if line:  # filter out keep-alive new lines
+                        print line
+                        self.__processResponse(json.loads(line))
+            except (requests.ConnectionError, SSLError):
                 self.last_error = 'TCP/IP'
                 continue
             except requests.HTTPError:
@@ -35,27 +39,23 @@ class CurrencyDenominationTwitterApp:
                     self.last_error = 'Gen Error'
                 continue
 
-            for line in stream.iter_lines():
-                if line:  # filter out keep-alive new lines
-                    print line
-                    self.__processResponse(json.loads(line))
-
     def __sleepBasedOnLastError(self):
         if self.last_error == None:
             return
         elif self.last_error == 'TCP/IP':
+            print 'Tcp/Ip error'
             sleep(self.network_error_delay)
-            self.network_error_delay += 250 if (self.network_error_delay != 16000) else 0
+            self.network_error_delay += 0.25 if (self.network_error_delay != 16) else 0
         elif self.last_error == '420':
             sleep(self.http_420_error_delay)
             self.http_420_error_delay *= 2
         else:
             sleep(self.general_http_error_delay)
-            self.general_http_error_delay *= 2 if (self.general_http_error_delay != 320000) else 1
+            self.general_http_error_delay *= 2 if (self.general_http_error_delay != 320) else 1
 
     def __connectToStream(self):
         stream_url = 'https://userstream.twitter.com/1.1/user.json'
-        return requests.post(stream_url, auth=self.oauth, stream=True)
+        return requests.get(stream_url, auth=self.oauth, stream=True, timeout=90)
 
     def __processResponse(self, response):
         if ('direct_message' in response) and (self.__senderIsNotApp(response)):
