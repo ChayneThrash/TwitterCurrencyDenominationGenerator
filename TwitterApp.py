@@ -1,7 +1,7 @@
 __author__ = 'Chayne'
 import requests, json, sys
 from requests_oauthlib import OAuth1
-from CurrencyDenominationGenerator import *
+from GetCurrencyDenominations import *
 import Settings
 from time import sleep
 from ssl import SSLError
