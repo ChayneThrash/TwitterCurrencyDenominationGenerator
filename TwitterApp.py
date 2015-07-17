@@ -8,17 +8,22 @@ from ssl import SSLError
 import socket
 
 
+# This class is responsible for running the twitter application. It functions by connecting to
+# a user stream and responding whenever a direct message is received.
 class ChangeGeneratorTwitterApp:
+
+    NETWORK_ERROR_INIT_DELAY = 0
+    SERVER_OVERLOAD_INIT_DELAY = 5
+    HTTP_420_INIT_DELAY = 60
+
     def __init__(self):
         self.oauth = OAuth1(Settings.CONSUMER_KEY, client_secret=Settings.CONSUMER_SECRET,
                             resource_owner_key=Settings.TOKEN_KEY,
                             resource_owner_secret=Settings.TOKEN_SECRET, signature_type='auth_header')
         self.last_error = None
-        self.network_error_delay = 0
-        self.general_http_error_delay = 5
-        self.http_420_error_delay = 60
-        self.num_server_overload_errors = 0
-        self.num_420_errors = 0
+        self.network_error_delay = ChangeGeneratorTwitterApp.NETWORK_ERROR_INIT_DELAY
+        self.server_overload_error_delay = ChangeGeneratorTwitterApp.SERVER_OVERLOAD_INIT_DELAY
+        self.http_420_error_delay = ChangeGeneratorTwitterApp.HTTP_420_INIT_DELAY
 
     def runApp(self):
         while True:
@@ -42,14 +47,13 @@ class ChangeGeneratorTwitterApp:
                 elif stream.status_code == 503:
                     print '503 error has occurred. Attempting to reconnect.'
                     self.last_error = 'Server Overload'
-                else: # Twitter doesn't like something we are sending. Must be fixed.
+                else:  # Twitter doesn't like something we are sending. Must be fixed.
                     print 'The following HTTP error code was received: ', stream.status_code
                     print 'This error must be fixed. Application cannot connect.'
                     sys.exit(1)
                 continue
             except Exception as ex:
-                print 'The following unexpected error occurred:'
-                print ex
+                print 'The following unexpected error occurred:', ex
                 sys.exit(1)
 
     def __sleepBasedOnLastError(self):
@@ -58,18 +62,18 @@ class ChangeGeneratorTwitterApp:
         elif self.last_error == 'TCP/IP':
             sleep(self.network_error_delay)
             self.network_error_delay += 0.25 if (self.network_error_delay != 16) else 0
-            self.general_http_error_delay = 0
-            self.http_420_error_delay = 60
+            self.server_overload_error_delay = ChangeGeneratorTwitterApp.SERVER_OVERLOAD_INIT_DELAY
+            self.http_420_error_delay = ChangeGeneratorTwitterApp.HTTP_420_INIT_DELAY
         elif self.last_error == '420':
             sleep(self.http_420_error_delay)
             self.http_420_error_delay *= 2
-            self.network_error_delay = 0
-            self.general_http_error_delay = 0
+            self.network_error_delay = ChangeGeneratorTwitterApp.NETWORK_ERROR_INIT_DELAY
+            self.server_overload_error_delay = ChangeGeneratorTwitterApp.SERVER_OVERLOAD_INIT_DELAY
         else:
-            sleep(self.general_http_error_delay)
-            self.general_http_error_delay *= 2 if (self.general_http_error_delay != 320) else 1
-            self.network_error_delay = 0
-            self.http_420_error_delay = 0
+            sleep(self.server_overload_error_delay)
+            self.server_overload_error_delay *= 2 if (self.server_overload_error_delay != 320) else 1
+            self.network_error_delay = ChangeGeneratorTwitterApp.NETWORK_ERROR_INIT_DELAY
+            self.http_420_error_delay = ChangeGeneratorTwitterApp.HTTP_420_INIT_DELAY
 
     def __connectToStream(self):
         stream_url = 'https://userstream.twitter.com/1.1/user.json'
