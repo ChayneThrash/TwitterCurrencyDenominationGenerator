@@ -1,11 +1,15 @@
 __author__ = 'Chayne'
-import requests, json, sys
+import requests, json, sys, thread, Queue, traceback
 from requests_oauthlib import OAuth1
 from GetChangeAmounts import generateChangeString
 import Settings
 from time import sleep
 from ssl import SSLError
 import socket
+
+
+def messageIsFromOtherUser(direct_message):
+    return direct_message['direct_message']['sender']['screen_name'] != Settings.TWITTER_USER_NAME
 
 
 # This class is responsible for running the twitter application. It functions by connecting to
@@ -24,10 +28,12 @@ class ChangeGeneratorTwitterApp:
         self.network_error_delay = ChangeGeneratorTwitterApp.NETWORK_ERROR_INIT_DELAY
         self.server_overload_error_delay = ChangeGeneratorTwitterApp.SERVER_OVERLOAD_INIT_DELAY
         self.http_420_error_delay = ChangeGeneratorTwitterApp.HTTP_420_INIT_DELAY
+        self.message_queue = Queue.Queue()
 
     def runApp(self):
         while True:
             self.__sleepBasedOnLastError()
+            thread.start_new_thread(self.__handleMessages, ())
 
             try:
                 stream = self.__connectToStream()
@@ -54,6 +60,7 @@ class ChangeGeneratorTwitterApp:
                 continue
             except Exception as ex:
                 print 'The following unexpected error occurred:', ex
+                print traceback.format_exc()
                 sys.exit(1)
 
     def __sleepBasedOnLastError(self):
@@ -80,18 +87,33 @@ class ChangeGeneratorTwitterApp:
         return requests.get(stream_url, auth=self.oauth, stream=True, timeout=90)
 
     def __processResponse(self, response):
-        if ('direct_message' in response) and (self.__messageIsFromOtherUser(response)):
+        if ('direct_message' in response) and (messageIsFromOtherUser(response)):
             received_message = response['direct_message']
             self.__respond(received_message)
 
-    def __messageIsFromOtherUser(self, direct_message):
-        return direct_message['direct_message']['sender']['screen_name'] != Settings.TWITTER_USER_NAME
-
     def __respond(self, received_message):
-        direct_message_url = 'https://api.twitter.com/1.1/direct_messages/new.json'
         direct_message_params = dict(text=generateChangeString(received_message['text']),
                                      user_id=received_message['sender']['id'])
-        requests.post(direct_message_url, params=direct_message_params, auth=self.oauth)
+        self.message_queue.put(direct_message_params)
+
+    def __directMesssageSentSuccessfully(self, response_content):
+        try:
+            message_json = json.loads(response_content)
+            return True if ('direct_message' in message_json) and (not messageIsFromOtherUser(message_json)) else False
+        except Exception as ex:
+            print 'The following error occurred when sending: ', ex
+            return False
+
+    def __handleMessages(self):
+        direct_message_url = 'https://api.twitter.com/1.1/direct_messages/new.json'
+        while True:
+            last_message_sent = True
+            while not self.message_queue.empty():
+                if last_message_sent:
+                    message = self.message_queue.get()
+                response = requests.post(url=direct_message_url, params=message, auth=self.oauth)
+                print response.content
+                last_message_sent = self.__directMesssageSentSuccessfully(response.content)
 
 
 if __name__ == '__main__':
