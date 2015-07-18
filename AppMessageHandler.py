@@ -2,6 +2,11 @@ __author__ = 'Chayne'
 import requests, traceback, json
 from TwitterApp import messageIsFromOtherUser
 
+
+# This class is responsible for sending message as the app receives them.
+# The class contains a queue shared by the app so that when the app
+# prepares information to send, it can simply queue it up and let this class
+# handle the rest.
 class AppMessageHandler:
     def __init__(self, oauth, queue):
         self.oauth = oauth
