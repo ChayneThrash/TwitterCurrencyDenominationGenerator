@@ -60,7 +60,7 @@ class ChangeGeneratorTwitterApp:
                 continue
             except Exception as ex:
                 print 'The following unexpected error occurred:', ex
-                print traceback.format_exc()
+                print traceback.format_exc()  # This prints the stack trace.
                 sys.exit(1)
 
     def __sleepBasedOnLastError(self):
