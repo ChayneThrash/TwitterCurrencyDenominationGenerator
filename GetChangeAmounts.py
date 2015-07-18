@@ -70,8 +70,8 @@ def generateChangeString(currency):
     currency = currency[1:]  # Strip off the dollar sign.
     currency = currency.split('.')
 
-    if len(currency) > 2:
-        return 'Invalid number of decimals'
+    if len(currency) != 2:
+        return 'Invalid number of decimals. Must have one and only one.'
     if len(currency[1]) != 2:
         return 'Invalid number of values after decimal.'
 
