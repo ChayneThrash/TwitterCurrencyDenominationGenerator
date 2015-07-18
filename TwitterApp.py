@@ -1,11 +1,11 @@
 __author__ = 'Chayne'
-import requests, json, sys, thread, Queue, traceback
+import requests, json, sys, thread, Queue, traceback, socket
 from requests_oauthlib import OAuth1
-from GetChangeAmounts import generateChangeString
-import Settings
 from time import sleep
 from ssl import SSLError
-import socket
+import Settings
+from GetChangeAmounts import generateChangeString
+import AppMessageHandler
 
 
 def messageIsFromOtherUser(direct_message):
@@ -29,11 +29,12 @@ class ChangeGeneratorTwitterApp:
         self.server_overload_error_delay = ChangeGeneratorTwitterApp.SERVER_OVERLOAD_INIT_DELAY
         self.http_420_error_delay = ChangeGeneratorTwitterApp.HTTP_420_INIT_DELAY
         self.message_queue = Queue.Queue()
+        self.message_handler = AppMessageHandler.AppMessageHandler(oauth=self.oauth, queue=self.message_queue)
 
     def runApp(self):
         while True:
             self.__sleepBasedOnLastError()
-            thread.start_new_thread(self.__handleMessages, ())
+            thread.start_new_thread(self.message_handler.handleMessages, ())
 
             try:
                 stream = self.__connectToStream()
@@ -95,25 +96,6 @@ class ChangeGeneratorTwitterApp:
         direct_message_params = dict(text=generateChangeString(received_message['text']),
                                      user_id=received_message['sender']['id'])
         self.message_queue.put(direct_message_params)
-
-    def __directMesssageSentSuccessfully(self, response_content):
-        try:
-            message_json = json.loads(response_content)
-            return True if ('direct_message' in message_json) and (not messageIsFromOtherUser(message_json)) else False
-        except Exception as ex:
-            print 'The following error occurred when sending: ', ex
-            return False
-
-    def __handleMessages(self):
-        direct_message_url = 'https://api.twitter.com/1.1/direct_messages/new.json'
-        while True:
-            last_message_sent = True
-            while not self.message_queue.empty():
-                if last_message_sent:
-                    message = self.message_queue.get()
-                response = requests.post(url=direct_message_url, params=message, auth=self.oauth)
-                print response.content
-                last_message_sent = self.__directMesssageSentSuccessfully(response.content)
 
 
 if __name__ == '__main__':
